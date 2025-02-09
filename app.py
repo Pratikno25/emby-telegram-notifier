@@ -17,6 +17,7 @@ load_dotenv()
 # Telegram Configuration
 TELEGRAM_BOT_TOKEN = os.environ.get("TELEGRAM_BOT_TOKEN")
 TELEGRAM_CHAT_ID = os.environ.get("TELEGRAM_CHAT_ID")
+TELEGRAM_THREAD_ID = os.environ.get("TELEGRAM_THREAD_ID", None)  # Optional thread ID
 EMBY_BASE_URL = os.environ.get("EMBY_BASE_URL")
 EMBY_API_KEY = os.environ.get("EMBY_API_KEY")
 EPISODE_PREMIERED_WITHIN_X_DAYS = int(os.environ.get("EPISODE_PREMIERED_WITHIN_X_DAYS"))
@@ -51,13 +52,19 @@ notified_item_file = os.path.join("data", "notified_item.json")
 file_lock = threading.Lock()
 
 
-def send_telegram_notification(text, photo_id):
+def send_telegram_notification(text, photo_id, thread_id=None):
     base_photo_url = (
         f"{EMBY_BASE_URL}/Items/{photo_id}/Images/Primary" if photo_id else None
     )
 
     try:
-        data = {"chat_id": TELEGRAM_CHAT_ID, "caption": text, "parse_mode": "Markdown"}
+        data = {
+            "chat_id": TELEGRAM_CHAT_ID,
+            "caption": text,
+            "parse_mode": "Markdown",
+        }
+        if thread_id:
+            data["message_thread_id"] = thread_id  # Add thread_id if provided
 
         if photo_id:
             image_response = requests.get(base_photo_url)
@@ -234,7 +241,7 @@ def process_payload(item_id):
 
             mark_item_as_notified(item_name, release_year)
 
-            send_telegram_notification(notification_message, item_id)
+            send_telegram_notification(notification_message, item_id, TELEGRAM_THREAD_ID)
 
             logging.info(
                 f"(Movie) {item_name} {release_year} notification was sent to Telegram!."
@@ -271,7 +278,7 @@ def process_payload(item_id):
 
             mark_item_as_notified(series_name_cleaned, season_name)
 
-            send_telegram_notification(notification_message, season_id)
+            send_telegram_notification(notification_message, season_id, TELEGRAM_THREAD_ID)
 
             logging.info(
                 f"(Season) {series_name_cleaned} "
@@ -292,7 +299,7 @@ def process_payload(item_id):
 
                 mark_item_as_notified(series_name_cleaned, episode_stored)
 
-                response = send_telegram_notification(notification_message, season_id)
+                response = send_telegram_notification(notification_message, season_id, TELEGRAM_THREAD_ID)
 
                 if response:
                     logging.info(
@@ -303,7 +310,7 @@ def process_payload(item_id):
                 else:
                     mark_item_as_notified(series_name_cleaned, episode_stored)
 
-                    send_telegram_notification(notification_message, series_id)
+                    send_telegram_notification(notification_message, series_id, TELEGRAM_THREAD_ID)
 
                     logging.warning(
                         f"(Episode) {series_name} season image does not exist, "
@@ -362,7 +369,7 @@ def emby_webhook():
         notification_message = (
             f"Success!\n\n*Server Name*: {server_name}\n\n*Server Version*: {version}"
         )
-        send_telegram_notification(notification_message, None)
+        send_telegram_notification(notification_message, None, TELEGRAM_THREAD_ID)
         return "OK"
 
     try:
